@@ -10,16 +10,12 @@ from google import genai
 from sentence_transformers import SentenceTransformer
 
 
-# =====================
-# FastAPI App
-# =====================
-
 app = FastAPI()
 
 
-# =====================
-# Gemini API
-# =====================
+# ======================
+# Gemini
+# ======================
 
 API_KEY = "YOUR_GEMINI_API_KEY"
 
@@ -28,29 +24,24 @@ client = genai.Client(
 )
 
 
-# =====================
-# Embedding Model
-# =====================
+# ======================
+# Embeddings
+# ======================
 
 embed_model = SentenceTransformer(
     "all-MiniLM-L6-v2"
 )
 
 
-# =====================
-# Load Catalog + FAISS
-# =====================
+# ======================
+# Load Catalog + Index
+# ======================
 
-index = None
 catalog = []
+index = None
 
 
 try:
-
-    index = faiss.read_index(
-        "catalog.index"
-    )
-
 
     with open(
         "catalog.json",
@@ -58,18 +49,20 @@ try:
         encoding="utf-8"
     ) as file:
 
-        catalog = json.load(
-            file
-        )
+        catalog = json.load(file)
+
+
+    index = faiss.read_index(
+        "catalog.index"
+    )
 
 
     print(
-        "Loaded catalog and FAISS index"
+        "Catalog loaded"
     )
 
 
 except Exception as e:
-
 
     print(
         f"Startup error: {e}"
@@ -77,9 +70,9 @@ except Exception as e:
 
 
 
-# =====================
+# ======================
 # Request Models
-# =====================
+# ======================
 
 class Message(BaseModel):
 
@@ -94,9 +87,9 @@ class ChatRequest(BaseModel):
 
 
 
-# =====================
-# Retrieval Function
-# =====================
+# ======================
+# Retrieval
+# ======================
 
 def get_catalog_matches(
     query,
@@ -181,9 +174,9 @@ def get_catalog_matches(
 
 
 
-# =====================
-# Root Endpoint
-# =====================
+# ======================
+# Routes
+# ======================
 
 @app.get("/")
 
@@ -193,14 +186,10 @@ def home():
 
         "message":
 
-        "SHL Assessment API running"
+        "SHL API running"
     }
 
 
-
-# =====================
-# Health Endpoint
-# =====================
 
 @app.get("/health")
 
@@ -215,9 +204,9 @@ def health():
 
 
 
-# =====================
-# Chat Endpoint
-# =====================
+# ======================
+# Chat
+# ======================
 
 @app.post("/chat")
 
@@ -225,6 +214,67 @@ async def chat(
     request:
     ChatRequest
 ):
+
+
+    query = request.messages[
+        -1
+    ].content
+
+
+    query_lower = query.lower()
+
+
+
+    vague_words = [
+
+        "hire",
+
+        "someone",
+
+        "assessment",
+
+        "employee",
+
+        "test"
+
+    ]
+
+
+
+    if (
+
+        len(query_lower.split()) < 4
+
+        or
+
+        any(
+
+            x in query_lower
+
+            for x in vague_words
+
+        )
+
+    ):
+
+
+        return {
+
+            "reply":
+
+            "Could you specify role, skills, experience level, or job requirements?",
+
+
+            "recommendations":
+
+            [],
+
+
+            "end_of_conversation":
+
+            False
+        }
+
 
 
     history = "\n".join(
@@ -255,7 +305,6 @@ Return ONLY JSON:
 {{
 "intent":
 "SEARCH" |
-"CLARIFY" |
 "COMPARE" |
 "REFUSE",
 
@@ -293,109 +342,89 @@ Return ONLY JSON:
         )
 
 
-
         intent = decision.get(
             "intent",
-            "CLARIFY"
+            "SEARCH"
         )
 
 
         content = decision.get(
             "content",
-            ""
+            query
         )
 
 
 
-        recommendations = []
-
-        end = False
+        if intent == "REFUSE":
 
 
+            return {
 
-        if intent == "SEARCH":
+                "reply":
 
-
-            recommendations = get_catalog_matches(
-                content
-            )
+                "I only help with SHL assessments.",
 
 
-            reply = (
+                "recommendations":
 
-                "Here are recommended assessments."
-            )
+                [],
 
 
-            end = True
+                "end_of_conversation":
+
+                False
+            }
 
 
 
-        elif intent == "COMPARE":
-
-
-            recommendations = get_catalog_matches(
-                content,
-                k=2
-            )
-
-
-            reply = (
-
-                "Comparison results."
-            )
-
-
-            end = False
+        recommendations = get_catalog_matches(
+            content
+        )
 
 
 
-        elif intent == "REFUSE":
+        if intent == "COMPARE":
 
 
-            reply = (
+            return {
 
-                "I only help with SHL assessments."
-            )
+                "reply":
 
-
-            end = False
+                "Comparison results.",
 
 
+                "recommendations":
 
-        else:
-
-
-            reply = content
+                recommendations[:2],
 
 
-            end = False
+                "end_of_conversation":
+
+                False
+            }
 
 
 
         return {
 
             "reply":
-            reply,
+
+            "Here are recommended assessments.",
 
 
             "recommendations":
+
             recommendations,
 
 
             "end_of_conversation":
-            end
+
+            True
         }
 
 
 
-    except Exception as e:
-
-
-        query = request.messages[
-            -1
-        ].content
-
+    except:
 
 
         recommendations = get_catalog_matches(
@@ -411,7 +440,7 @@ Return ONLY JSON:
 
                 "reply":
 
-                "Gemini unavailable. Showing recommendations from catalog.",
+                "Gemini unavailable. Showing catalog recommendations.",
 
 
                 "recommendations":
@@ -430,7 +459,7 @@ Return ONLY JSON:
 
             "reply":
 
-            "Could you provide more role or skill details?",
+            "Could you provide more details?",
 
 
             "recommendations":
