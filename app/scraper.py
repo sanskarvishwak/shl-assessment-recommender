@@ -1,9 +1,18 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 import time
 import json
 
-driver = webdriver.Chrome()
+
+driver = webdriver.Chrome(
+    service=Service(
+        ChromeDriverManager().install()
+    )
+)
+
 
 url = "https://www.shl.com/solutions/products/product-catalog/"
 
@@ -11,42 +20,110 @@ driver.get(url)
 
 time.sleep(10)
 
-links = driver.find_elements(By.TAG_NAME, "a")
+links = driver.find_elements(
+    By.TAG_NAME,
+    "a"
+)
+
 
 products = []
+
 
 for link in links:
 
     text = link.text.strip()
-    href = link.get_attribute("href")
 
-    if href and "product-catalog/view" in href:
+    href = link.get_attribute(
+        "href"
+    )
+
+
+    if (
+
+        href
+
+        and
+
+        "product-catalog/view"
+
+        in href
+
+    ):
+
 
         product = {
-            "name": text,
-            "url": href
+
+            "name":
+            text,
+
+
+            "url":
+            href,
+
+
+            "test_type":
+            "K"
         }
 
-        products.append(product)
 
-# Remove duplicates
+        products.append(
+            product
+        )
+
+
+
 unique_products = []
 
 seen = set()
 
+
 for product in products:
+
 
     if product["url"] not in seen:
 
-        seen.add(product["url"])
-        unique_products.append(product)
 
-# Save JSON
-with open("catalog.json", "w", encoding="utf-8") as file:
+        seen.add(
+            product["url"]
+        )
 
-    json.dump(unique_products, file, indent=4)
 
-print("Catalog saved successfully")
-print("Total products:", len(unique_products))
+        unique_products.append(
+            product
+        )
+
+
+
+with open(
+
+    "catalog.json",
+
+    "w",
+
+    encoding="utf-8"
+
+) as file:
+
+
+    json.dump(
+
+        unique_products,
+
+        file,
+
+        indent=4
+    )
+
+
+
+print(
+    "Catalog saved successfully"
+)
+
+print(
+    "Total products:",
+    len(unique_products)
+)
+
 
 driver.quit()
